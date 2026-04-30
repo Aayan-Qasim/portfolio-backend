@@ -29,14 +29,14 @@ async function connectDB() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("❌ MONGODB_URI not set in .env");
-    process.exit(1);
+    return; // process.exit hata diya
   }
   try {
     await mongoose.connect(uri);
     console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
-    process.exit(1);
+    // process.exit hata diya — Vercel crash nahi karega
   }
 }
 
@@ -236,8 +236,8 @@ function createTransporter() {
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,   // aapki Gmail: e.g. qasimaayan92@gmail.com
-      pass: process.env.EMAIL_PASS,   // Gmail App Password (16 char)
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
     },
   });
 }
@@ -340,9 +340,14 @@ app.post("/api/contact", contactLimiter, async (req, res) => {
   }
 });
 
-// ── Start ────────────────────────────────────────────────────
-connectDB().then(() => {
+// ── DB Connect + Server Start ────────────────────────────────
+connectDB();
+
+if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
-});
+}
+
+// Vercel ke liye export
+module.exports = app;
