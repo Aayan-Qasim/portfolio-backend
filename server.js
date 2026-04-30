@@ -98,10 +98,18 @@ const SYSTEM_PROMPT = `You are Aayan's portfolio AI assistant. Answer questions 
 const GROK_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROK_MODEL = "llama-3.3-70b-versatile";
 
-// ── Health Check ─────────────────────────────────────────────
+// ── Routes ───────────────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.json({ message: "Portfolio Backend API is running", status: "ok" });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Favicon errors stop karne ke liye
+app.get("/favicon.ico", (req, res) => res.status(204).end());
+app.get("/favicon.png", (req, res) => res.status(204).end());
 
 // ── POST /api/chat ───────────────────────────────────────────
 app.post("/api/chat", chatLimiter, async (req, res) => {
