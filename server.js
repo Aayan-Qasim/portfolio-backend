@@ -24,19 +24,23 @@ app.use(
 
 app.use(express.json());
 
-// ── MongoDB Connect ──────────────────────────────────────────
 async function connectDB() {
+  if (mongoose.connection.readyState >= 1) return;
+
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("❌ MONGODB_URI not set in .env");
-    return; // process.exit hata diya
+    return;
   }
+
   try {
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
     console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
-    // process.exit hata diya — Vercel crash nahi karega
   }
 }
 
@@ -61,7 +65,7 @@ const ChatSessionSchema = new mongoose.Schema(
 // 24 ghante baad auto delete
 ChatSessionSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 });
 
-const ChatSession = mongoose.model("ChatSession", ChatSessionSchema);
+const ChatSession = mongoose.models.ChatSession || mongoose.model("ChatSession", ChatSessionSchema);
 
 // ── Rate Limiter ─────────────────────────────────────────────
 const chatLimiter = rateLimit({
@@ -102,6 +106,7 @@ app.get("/health", (_req, res) => {
 // ── POST /api/chat ───────────────────────────────────────────
 app.post("/api/chat", chatLimiter, async (req, res) => {
   try {
+    await connectDB();
     const { sessionId, message } = req.body;
 
     if (!sessionId || typeof sessionId !== "string") {
@@ -207,6 +212,7 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
 // ── GET /api/chat/history/:sessionId ────────────────────────
 app.get("/api/chat/history/:sessionId", async (req, res) => {
   try {
+    await connectDB();
     const session = await ChatSession.findOne({ sessionId: req.params.sessionId });
     if (!session) {
       return res.json({ sessionId: req.params.sessionId, messages: [], count: 0 });
@@ -224,6 +230,7 @@ app.get("/api/chat/history/:sessionId", async (req, res) => {
 // ── DELETE /api/chat/history/:sessionId ─────────────────────
 app.delete("/api/chat/history/:sessionId", async (req, res) => {
   try {
+    await connectDB();
     await ChatSession.findOneAndDelete({ sessionId: req.params.sessionId });
     res.json({ success: true });
   } catch (err) {
