@@ -24,23 +24,19 @@ app.use(
 
 app.use(express.json());
 
+// ── MongoDB Connect ──────────────────────────────────────────
 async function connectDB() {
-  if (mongoose.connection.readyState >= 1) return;
-
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("❌ MONGODB_URI not set in .env");
-    return;
+    process.exit(1);
   }
-
   try {
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
+    await mongoose.connect(uri);
     console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
+    process.exit(1);
   }
 }
 
@@ -65,7 +61,7 @@ const ChatSessionSchema = new mongoose.Schema(
 // 24 ghante baad auto delete
 ChatSessionSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 });
 
-const ChatSession = mongoose.models.ChatSession || mongoose.model("ChatSession", ChatSessionSchema);
+const ChatSession = mongoose.model("ChatSession", ChatSessionSchema);
 
 // ── Rate Limiter ─────────────────────────────────────────────
 const chatLimiter = rateLimit({
@@ -82,39 +78,48 @@ const SYSTEM_PROMPT = `You are Aayan's portfolio AI assistant. Answer questions 
 **Name:** M. Aayan Qasim | **Title:** Web Developer | **Location:** Islamabad, Pakistan
 
 **Skills:**
-- Frontend: HTML5, CSS3, JavaScript (ES6+), React.js, Tailwind CSS, Bootstrap
-- Backend: Node.js, Express.js, REST APIs, MongoDB, MySQL
-- Tools: Git, GitHub, VS Code
+- Frontend: HTML5, CSS3, JavaScript (ES6+), React.js, Tailwind CSS, Bootstrap, Responsive Web Design
+- Backend: Node.js (Basic), Express.js (Basic), REST APIs (Basic)
+- Database: MongoDB, MySQL (Basic)
+- Tools: Git, GitHub, VS Code, NPM, Browser DevTools
+- Other: UI/UX Best Practices, Cross-Browser Compatibility, Debugging & Problem Solving
 
-**Experience:** Web Development Intern at Sky Coaching Center (3 months)
-- Built responsive websites with React, integrated APIs, used Git for version control
+**Current Job:** Web Developer at SkyPulse — Islamabad, Pakistan (2025 – Present)
+- Building and maintaining client-facing web applications
+- Developing responsive UIs using React.js, Tailwind CSS, and modern JavaScript (ES6+)
+- Collaborating with team on API integration using Node.js & Express.js
+- Implementing performance optimizations and cross-browser compatibility
+
+**Previous Experience:**
+1. Web Developer at Engineering Equipment Pvt. Limited — Islamabad (2024–2025, 1 Year)
+   - Developed responsive websites using HTML, CSS, JavaScript, and React
+   - Built reusable components and managed state in React projects
+   - Integrated REST APIs and handled form validations
+
+2. Web Development Intern at SkyPulse — Islamabad (2024, 3 Months)
+   - Front-end development with HTML, CSS, and JavaScript
+   - Built UI components and debugged across browsers
+   - Used Git & GitHub for version control
 
 **Education:** F.A Intermediate (2025 - 550 marks) | Matriculation (2023 - 663 marks)
 
 **Projects:** Portfolio Website (React, Tailwind, Framer Motion) | Weather App (JS, REST API) | Task Manager (React, Bootstrap)
 
-**Contact:** 0307-5177781 | aayanqasim@email.com | Available for freelance & full-time work`;
+**Contact:** 0307-5177781 | qasimaayan92@gmail.com | Available for freelance & full-time work
+
+**Note:** If asked where Aayan currently works or his current job — answer is SkyPulse, Islamabad as Web Developer (2026–Present).`;
 
 const GROK_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROK_MODEL = "llama-3.3-70b-versatile";
 
-// ── Routes ───────────────────────────────────────────────────
-app.get("/", (req, res) => {
-  res.json({ message: "Portfolio Backend API is running", status: "ok" });
-});
-
+// ── Health Check ─────────────────────────────────────────────
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Favicon errors stop karne ke liye
-app.get("/favicon.ico", (req, res) => res.status(204).end());
-app.get("/favicon.png", (req, res) => res.status(204).end());
-
 // ── POST /api/chat ───────────────────────────────────────────
 app.post("/api/chat", chatLimiter, async (req, res) => {
   try {
-    await connectDB();
     const { sessionId, message } = req.body;
 
     if (!sessionId || typeof sessionId !== "string") {
@@ -220,7 +225,6 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
 // ── GET /api/chat/history/:sessionId ────────────────────────
 app.get("/api/chat/history/:sessionId", async (req, res) => {
   try {
-    await connectDB();
     const session = await ChatSession.findOne({ sessionId: req.params.sessionId });
     if (!session) {
       return res.json({ sessionId: req.params.sessionId, messages: [], count: 0 });
@@ -238,7 +242,6 @@ app.get("/api/chat/history/:sessionId", async (req, res) => {
 // ── DELETE /api/chat/history/:sessionId ─────────────────────
 app.delete("/api/chat/history/:sessionId", async (req, res) => {
   try {
-    await connectDB();
     await ChatSession.findOneAndDelete({ sessionId: req.params.sessionId });
     res.json({ success: true });
   } catch (err) {
@@ -251,8 +254,8 @@ function createTransporter() {
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: process.env.EMAIL_USER,   // aapki Gmail: e.g. qasimaayan92@gmail.com
+      pass: process.env.EMAIL_PASS,   // Gmail App Password (16 char)
     },
   });
 }
@@ -355,14 +358,9 @@ app.post("/api/contact", contactLimiter, async (req, res) => {
   }
 });
 
-// ── DB Connect + Server Start ────────────────────────────────
-connectDB();
-
-if (process.env.NODE_ENV !== "production") {
+// ── Start ────────────────────────────────────────────────────
+connectDB().then(() => {
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`✅ Server running on http://localhost:${PORT}`);
   });
-}
-
-// Vercel ke liye export
-module.exports = app;
+});
