@@ -66,9 +66,9 @@ const ChatSession = mongoose.model("ChatSession", ChatSessionSchema);
 // ── ContactMessage Model ────────────────────────────────────
 const ContactMessageSchema = new mongoose.Schema(
   {
-    name:      { type: String, required: true, trim: true },
-    email:     { type: String, required: true, trim: true, lowercase: true },
-    message:   { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, trim: true, lowercase: true },
+    message: { type: String, required: true, trim: true },
     ipAddress: { type: String },
     userAgent: { type: String },
   },
@@ -161,6 +161,11 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// ── Root & Favicon (suppress 404s) ───────────────────────────
+app.get("/", (_req, res) => res.json({ status: "Aayan Portfolio Backend ✅", version: "1.0.0" }));
+app.get("/favicon.ico", (_req, res) => res.status(204).end());
+app.get("/favicon.png", (_req, res) => res.status(204).end());
+
 // ── POST /api/chat ───────────────────────────────────────────
 app.post("/api/chat", chatLimiter, async (req, res) => {
   try {
@@ -245,7 +250,7 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
           const parsed = JSON.parse(json);
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) assistantReply += content;
-        } catch {}
+        } catch { }
       }
     }
 
