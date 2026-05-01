@@ -119,7 +119,7 @@ AAYAN'S COMPLETE INFO
 Full Name: M. Aayan Qasim
 Title: Web Developer
 Location: Islamabad, Pakistan
-Phone: 0307-5177781, 03279899966
+Phone: +92307-5177781, +92327-9899966
 Email: qasimaayan92@gmail.com
 GitHub: github.com/Aayan-Qasim
 LinkedIn: linkedin.com/in/aayan-qasim-9b426138b
