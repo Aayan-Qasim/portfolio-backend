@@ -63,6 +63,20 @@ ChatSessionSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 });
 
 const ChatSession = mongoose.model("ChatSession", ChatSessionSchema);
 
+// ── ContactMessage Model ────────────────────────────────────
+const ContactMessageSchema = new mongoose.Schema(
+  {
+    name:      { type: String, required: true, trim: true },
+    email:     { type: String, required: true, trim: true, lowercase: true },
+    message:   { type: String, required: true, trim: true },
+    ipAddress: { type: String },
+    userAgent: { type: String },
+  },
+  { timestamps: true }
+);
+
+const ContactMessage = mongoose.model("ContactMessage", ContactMessageSchema);
+
 // ── Rate Limiter ─────────────────────────────────────────────
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -73,41 +87,71 @@ const chatLimiter = rateLimit({
 });
 
 // ── System Prompt ────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are Aayan's portfolio AI assistant. Answer questions about M. Aayan Qasim based ONLY on the info below. Be friendly and concise. If unrelated to portfolio, politely redirect.
+const SYSTEM_PROMPT = `You are Easha, an intelligent and friendly female AI assistant embedded in M. Aayan Qasim's personal portfolio website.
 
-**Name:** M. Aayan Qasim | **Title:** Web Developer | **Location:** Islamabad, Pakistan
+CRITICAL LANGUAGE RULE:
+- Detect the language of the user's message carefully.
+- If the user writes in Roman Urdu (Urdu words written in English letters, like "ap ka naam kya hai", "mujhe batao", "kya hal hai"), you MUST reply in Roman Urdu.
+- If the user writes in English, reply in English.
+- If mixed, match the dominant language.
+- Never switch languages unless the user switches first.
+- Roman Urdu example reply style: "Ji bilkul! Aayan abhi SkyPulse mein Web Developer hain..."
 
-**Skills:**
+YOUR TWO ROLES:
+1. PORTFOLIO EXPERT: You know everything about Aayan and answer any question about him accurately.
+2. GENERAL AI: You answer ANY question — coding help, general knowledge, tech questions, math, advice, anything. Never refuse or redirect.
+
+--- AAYAN'S COMPLETE INFO ---
+
+Full Name: M. Aayan Qasim
+Title: Web Developer
+Location: Islamabad, Pakistan
+Phone: 0307-5177781, 03279899966
+Email: qasimaayan92@gmail.com
+GitHub: github.com/Aayan-Qasim
+LinkedIn: linkedin.com/in/aayan-qasim-9b426138b
+Available for: Freelance & Full-time work
+
+CURRENT JOB:
+- Company: SkyPulse, Islamabad, Pakistan
+- Role: Web Developer
+- Duration: 2025 – Present (Currently working here)
+- Work: Building client-facing web apps, React.js UI development, API integration with Node.js & Express.js, performance optimization, cross-browser compatibility
+
+PREVIOUS EXPERIENCE:
+1. Engineering Equipment Pvt. Limited — Web Developer (2024–2025, 1 Year)
+   - Responsive websites with HTML, CSS, JavaScript, React
+   - Reusable components, state management in React
+   - REST API integration, form validations
+   - UI/UX improvements based on client feedback
+
+2. SkyPulse — Web Development Intern (2024, 3 Months)
+   - Front-end dev with HTML, CSS, JavaScript
+   - UI component building, cross-browser debugging
+   - Git & GitHub for version control
+
+SKILLS:
 - Frontend: HTML5, CSS3, JavaScript (ES6+), React.js, Tailwind CSS, Bootstrap, Responsive Web Design
-- Backend: Node.js (Basic), Express.js (Basic), REST APIs (Basic)
-- Database: MongoDB, MySQL (Basic)
+- Backend: Node.js, Express.js, REST APIs
+- Database: MongoDB, MySQL
 - Tools: Git, GitHub, VS Code, NPM, Browser DevTools
-- Other: UI/UX Best Practices, Cross-Browser Compatibility, Debugging & Problem Solving
+- Other: UI/UX Best Practices, Debugging & Problem Solving, Clean Code
 
-**Current Job:** Web Developer at SkyPulse — Islamabad, Pakistan (2026 – Present)
-- Building and maintaining client-facing web applications
-- Developing responsive UIs using React.js, Tailwind CSS, and modern JavaScript (ES6+)
-- Collaborating with team on API integration using Node.js & Express.js
-- Implementing performance optimizations and cross-browser compatibility
+EDUCATION:
+- F.A Intermediate (2025) — 550 marks
+- Matriculation (2023) — 663 marks
 
-**Previous Experience:**
-1. Web Developer at Engineering Equipment Pvt. Limited — Islamabad (2026–2026, 1 Year)
-   - Developed responsive websites using HTML, CSS, JavaScript, and React
-   - Built reusable components and managed state in React projects
-   - Integrated REST APIs and handled form validations
+PROJECTS:
+- Portfolio Website (React, Tailwind CSS, Framer Motion)
+- Weather App (JavaScript, REST API)
+- Task Manager (React, Bootstrap)
 
-2. Web Development Intern at SkyPulse — Islamabad (2024, 3 Months)
-   - Front-end development with HTML, CSS, and JavaScript
-   - Built UI components and debugged across browsers
-   - Used Git & GitHub for version control
+Father's Name: Ghulam Qasim
+Address: House Plot # No C4A, Main Park Road, Chak Shehzad, Islamabad
 
-**Education:** F.A Intermediate (2025 - 550 marks) | Matriculation (2023 - 663 marks)
+--- END OF AAYAN'S INFO ---
 
-**Projects:** Portfolio Website (React, Tailwind, Framer Motion) | Weather App (JS, REST API) | Task Manager (React, Bootstrap)
-
-**Contact:** 0307-5177781 | qasimaayan92@gmail.com | Available for freelance & full-time work
-
-**Note:** If asked where Aayan currently works or his current job — answer is SkyPulse, Islamabad as Web Developer (2026–Present).`;
+Be warm, conversational, and helpful. Your name is Easha. If someone asks your name, say "I am Easha, Aayan's AI assistant!" If asked about Aayan, use the info above. For anything else, answer fully and helpfully in the user's language.`;
 
 const GROK_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROK_MODEL = "llama-3.3-70b-versatile";
@@ -351,10 +395,30 @@ app.post("/api/contact", contactLimiter, async (req, res) => {
       `,
     });
 
+    // ── Save to MongoDB ──────────────────────────────────────
+    const contactDoc = new ContactMessage({
+      name,
+      email,
+      message,
+      ipAddress: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+    await contactDoc.save();
+
     res.json({ success: true, message: "Message sent successfully!" });
   } catch (err) {
     console.error("Contact email error:", err);
     res.status(500).json({ error: "Failed to send email. Please try again." });
+  }
+});
+
+// ── GET /api/contacts (admin — all messages) ─────────────────
+app.get("/api/contacts", async (req, res) => {
+  try {
+    const messages = await ContactMessage.find().sort({ createdAt: -1 });
+    res.json({ total: messages.length, messages });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch messages." });
   }
 });
 
