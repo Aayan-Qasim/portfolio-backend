@@ -84,14 +84,14 @@ const SYSTEM_PROMPT = `You are Aayan's portfolio AI assistant. Answer questions 
 - Tools: Git, GitHub, VS Code, NPM, Browser DevTools
 - Other: UI/UX Best Practices, Cross-Browser Compatibility, Debugging & Problem Solving
 
-**Current Job:** Web Developer at SkyPulse — Islamabad, Pakistan (2025 – Present)
+**Current Job:** Web Developer at SkyPulse — Islamabad, Pakistan (2026 – Present)
 - Building and maintaining client-facing web applications
 - Developing responsive UIs using React.js, Tailwind CSS, and modern JavaScript (ES6+)
 - Collaborating with team on API integration using Node.js & Express.js
 - Implementing performance optimizations and cross-browser compatibility
 
 **Previous Experience:**
-1. Web Developer at Engineering Equipment Pvt. Limited — Islamabad (2024–2025, 1 Year)
+1. Web Developer at Engineering Equipment Pvt. Limited — Islamabad (2026–2026, 1 Year)
    - Developed responsive websites using HTML, CSS, JavaScript, and React
    - Built reusable components and managed state in React projects
    - Integrated REST APIs and handled form validations
