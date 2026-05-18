@@ -1,14 +1,29 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 
 const JWT_SECRET = process.env.JWT_SECRET || "aayan_portfolio_jwt_secret_key_2026";
+
+// Self-contained MongoDB connection check for Serverless environments
+const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) return;
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("MONGODB_URI is not defined in the environment variables.");
+  }
+  await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  });
+};
 
 // @desc    Register a new user
 // @route   POST /api/auth/signup
 // @access  Public
 const signup = async (req, res) => {
   try {
+    await connectDB();
     const { name, email, password } = req.body;
 
     if (!name?.trim() || !email?.trim() || !password?.trim()) {
@@ -61,6 +76,7 @@ const signup = async (req, res) => {
 // @access  Public
 const login = async (req, res) => {
   try {
+    await connectDB();
     const { email, password } = req.body;
 
     if (!email?.trim() || !password?.trim()) {
@@ -100,6 +116,7 @@ const login = async (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
   try {
+    await connectDB();
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Unauthorized. No token provided." });
