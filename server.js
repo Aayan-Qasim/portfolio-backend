@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const rateLimit = require("express-rate-limit");
 const nodemailer = require("nodemailer");
+const authRoutes = require("./routes/authRoutes");
 
 dotenv.config();
 
@@ -23,20 +24,25 @@ app.use(
 );
 
 app.use(express.json());
+app.use("/api/auth", authRoutes);
 
-// ── MongoDB Connect ──────────────────────────────────────────
 async function connectDB() {
+  if (mongoose.connection.readyState >= 1) return;
+
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("❌ MONGODB_URI not set in .env");
-    process.exit(1);
+    return;
   }
+
   try {
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
     console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
-    process.exit(1);
   }
 }
 
@@ -61,21 +67,8 @@ const ChatSessionSchema = new mongoose.Schema(
 // 24 ghante baad auto delete
 ChatSessionSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 });
 
-const ChatSession = mongoose.model("ChatSession", ChatSessionSchema);
+const ChatSession = mongoose.models.ChatSession || mongoose.model("ChatSession", ChatSessionSchema);
 
-// ── ContactMessage Model ────────────────────────────────────
-const ContactMessageSchema = new mongoose.Schema(
-  {
-    name:      { type: String, required: true, trim: true },
-    email:     { type: String, required: true, trim: true, lowercase: true },
-    message:   { type: String, required: true, trim: true },
-    ipAddress: { type: String },
-    userAgent: { type: String },
-  },
-  { timestamps: true }
-);
-
-const ContactMessage = mongoose.model("ContactMessage", ContactMessageSchema);
 
 // ── Rate Limiter ─────────────────────────────────────────────
 const chatLimiter = rateLimit({
@@ -87,103 +80,43 @@ const chatLimiter = rateLimit({
 });
 
 // ── System Prompt ────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are Easha 🌸, a warm, witty, and intelligent female AI assistant living inside M. Aayan Qasim's personal portfolio website.
+const SYSTEM_PROMPT = `You are Aayan's portfolio AI assistant. Answer questions about M. Aayan Qasim based ONLY on the info below. Be friendly and concise. If unrelated to portfolio, politely redirect.
 
-━━━ YOUR PERSONALITY ━━━
-- You are friendly, fun, and conversational — like a smart friend, not a robot
-- You use light humor when appropriate
-- You are encouraging and positive
-- When someone greets you (hi, hello, salam, kya hal hai, wassup), respond warmly and ask how you can help
-- When someone asks "kya kar rahi ho" or "what are you doing" — say something fun like "Aayan ke visitors ki madad kar rahi hoon, aur aap? 😄"
-- When someone asks your name → "Main Easha hoon! Aayan ki AI assistant 🌸"
-- When someone asks who made you → "Aayan ne mujhe banaya hai — quite talented hai na? 😄"
-- Use emojis naturally but not excessively
-- Be concise — don't write essays unless asked
+**Name:** M. Aayan Qasim | **Title:** Web Developer | **Location:** Islamabad, Pakistan
 
-━━━ CRITICAL LANGUAGE RULE ━━━
-Detect language from the user's message:
-- Roman Urdu (e.g. "ap ka naam kya hai", "kya hal hai", "mujhe batao") → Reply in Roman Urdu
-- English → Reply in English
-- Mixed → Match the dominant language
-- NEVER switch language unless user switches first
-- Roman Urdu reply style example: "Ji zaroor! Aayan abhi SkyPulse mein kaam kar rahe hain 😊"
+**Skills:**
+- Frontend: HTML5, CSS3, JavaScript (ES6+), React.js, Tailwind CSS, Bootstrap
+- Backend: Node.js, Express.js, REST APIs, MongoDB, MySQL
+- Tools: Git, GitHub, VS Code
 
-━━━ YOUR TWO ROLES ━━━
-1. PORTFOLIO EXPERT — You know everything about Aayan and answer accurately
-2. GENERAL AI — Answer ANY question: coding, math, general knowledge, advice, fun facts, anything. Never say "I can't answer that" or redirect.
+**Experience:** Web Development Intern at Sky Coaching Center (3 months)
+- Built responsive websites with React, integrated APIs, used Git for version control
 
-━━━━━━━━━━━━━━━━━━━━━━━
-AAYAN'S COMPLETE INFO
-━━━━━━━━━━━━━━━━━━━━━━━
+**Education:** F.A Intermediate (2025 - 550 marks) | Matriculation (2023 - 663 marks)
 
-Full Name: M. Aayan Qasim
-Title: Web Developer
-Location: Islamabad, Pakistan
-Phone: +92307-5177781, +92327-9899966
-Email: qasimaayan92@gmail.com
-GitHub: github.com/Aayan-Qasim
-LinkedIn: linkedin.com/in/aayan-qasim-9b426138b
-Available for: Freelance & Full-time work
+**Projects:** Portfolio Website (React, Tailwind, Framer Motion) | Weather App (JS, REST API) | Task Manager (React, Bootstrap)
 
-CURRENT JOB:
-→ Web Developer at SkyPulse, Islamabad (2025 – Present)
-  • Building client-facing web applications
-  • React.js UI development with Tailwind CSS
-  • API integration using Node.js & Express.js
-  • Performance optimization & cross-browser compatibility
-
-PREVIOUS EXPERIENCE:
-→ Web Developer at Engineering Equipment Pvt. Limited, Islamabad (2024–2025 | 1 Year)
-  • Responsive websites with HTML, CSS, JavaScript, React
-  • Reusable components & state management
-  • REST API integration & form validations
-  • UI/UX improvements based on client feedback
-
-→ Web Development Intern at SkyPulse, Islamabad (2024 | 3 Months)
-  • Front-end dev with HTML, CSS, JavaScript
-  • UI component building & cross-browser debugging
-  • Git & GitHub for version control
-
-SKILLS:
-• Frontend: HTML5, CSS3, JavaScript (ES6+), React.js, Tailwind CSS, Bootstrap, Responsive Web Design
-• Backend: Node.js, Express.js, REST APIs
-• Database: MongoDB, MySQL
-• Tools: Git, GitHub, VS Code, NPM, Browser DevTools
-• Other: UI/UX Best Practices, Debugging & Problem Solving, Clean Code
-
-EDUCATION:
-• F.A Intermediate (2025) — 550 marks
-• Matriculation (2023) — 663 marks
-
-PROJECTS:
-• Portfolio Website — React, Tailwind CSS, Framer Motion
-• Weather App — JavaScript, REST API
-• Task Manager — React, Bootstrap
-
-Personal:
-• Father's Name: Ghulam Qasim
-• Address: House Plot # No C4A, Main Park Road, Chak Shehzad, Islamabad
-
-━━━━━━━━━━━━━━━━━━━━━━━
-
-Always be helpful, warm, and human. Match the user's energy — if they're casual, be casual. If they're formal, be professional. You are the best part of Aayan's portfolio! 🌸`;
+**Contact:** 0307-5177781 | aayanqasim@email.com | Available for freelance & full-time work`;
 
 const GROK_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROK_MODEL = "llama-3.3-70b-versatile";
 
-// ── Health Check ─────────────────────────────────────────────
+// ── Routes ───────────────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.json({ message: "Portfolio Backend API is running", status: "ok" });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ── Root & Favicon (suppress 404s) ───────────────────────────
-app.get("/", (_req, res) => res.json({ status: "Aayan Portfolio Backend ✅", version: "1.0.0" }));
-app.get("/favicon.ico", (_req, res) => res.status(204).end());
-app.get("/favicon.png", (_req, res) => res.status(204).end());
+app.get("/favicon.ico", (req, res) => res.status(204).end());
+app.get("/favicon.png", (req, res) => res.status(204).end());
 
 // ── POST /api/chat ───────────────────────────────────────────
 app.post("/api/chat", chatLimiter, async (req, res) => {
   try {
+    await connectDB();
     const { sessionId, message } = req.body;
 
     if (!sessionId || typeof sessionId !== "string") {
@@ -265,7 +198,7 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
           const parsed = JSON.parse(json);
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) assistantReply += content;
-        } catch {}
+        } catch { }
       }
     }
 
@@ -289,6 +222,7 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
 // ── GET /api/chat/history/:sessionId ────────────────────────
 app.get("/api/chat/history/:sessionId", async (req, res) => {
   try {
+    await connectDB();
     const session = await ChatSession.findOne({ sessionId: req.params.sessionId });
     if (!session) {
       return res.json({ sessionId: req.params.sessionId, messages: [], count: 0 });
@@ -306,6 +240,7 @@ app.get("/api/chat/history/:sessionId", async (req, res) => {
 // ── DELETE /api/chat/history/:sessionId ─────────────────────
 app.delete("/api/chat/history/:sessionId", async (req, res) => {
   try {
+    await connectDB();
     await ChatSession.findOneAndDelete({ sessionId: req.params.sessionId });
     res.json({ success: true });
   } catch (err) {
@@ -313,13 +248,14 @@ app.delete("/api/chat/history/:sessionId", async (req, res) => {
   }
 });
 
+
 // ── Nodemailer Transporter ────────────────────────────────────
 function createTransporter() {
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,   // aapki Gmail: e.g. qasimaayan92@gmail.com
-      pass: process.env.EMAIL_PASS,   // Gmail App Password (16 char)
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
     },
   });
 }
@@ -415,16 +351,6 @@ app.post("/api/contact", contactLimiter, async (req, res) => {
       `,
     });
 
-    // ── Save to MongoDB ──────────────────────────────────────
-    const contactDoc = new ContactMessage({
-      name,
-      email,
-      message,
-      ipAddress: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
-      userAgent: req.headers["user-agent"],
-    });
-    await contactDoc.save();
-
     res.json({ success: true, message: "Message sent successfully!" });
   } catch (err) {
     console.error("Contact email error:", err);
@@ -432,19 +358,14 @@ app.post("/api/contact", contactLimiter, async (req, res) => {
   }
 });
 
-// ── GET /api/contacts (admin — all messages) ─────────────────
-app.get("/api/contacts", async (req, res) => {
-  try {
-    const messages = await ContactMessage.find().sort({ createdAt: -1 });
-    res.json({ total: messages.length, messages });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch messages." });
-  }
-});
+// ── DB Connect + Server Start ────────────────────────────────
+connectDB();
 
-// ── Start ────────────────────────────────────────────────────
-connectDB().then(() => {
+if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
-});
+}
+
+// Vercel ke liye export
+module.exports = app;
