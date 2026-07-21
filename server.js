@@ -98,8 +98,8 @@ const SYSTEM_PROMPT = `You are Aayan's portfolio AI assistant. Answer questions 
 
 **Contact:** 0307-5177781 | aayanqasim@email.com | Available for freelance & full-time work`;
 
-const GROK_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROK_MODEL = "llama-3.3-70b-versatile";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 // ── Routes ───────────────────────────────────────────────────
 app.get("/", (req, res) => {
@@ -126,9 +126,9 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
       return res.status(400).json({ error: "message required" });
     }
 
-    const GROK_API_KEY = process.env.GROK_API_KEY;
-    if (!GROK_API_KEY) {
-      return res.status(500).json({ error: "GROK_API_KEY not set in .env" });
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) {
+      return res.status(500).json({ error: "GROQ_API_KEY not set in .env" });
     }
 
     // Session lo ya banao
@@ -143,28 +143,29 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
       createdAt: new Date(),
     });
 
-    const historyForGrok = session.messages.map((m) => ({
+    const historyForGemini = session.messages.map((m) => ({
       role: m.role,
       content: m.content,
     }));
 
-    const grokRes = await fetch(GROK_API_URL, {
+    // Groq uses standard OpenAI-compatible API with Bearer token
+    const groqRes = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${GROK_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: GROK_MODEL,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...historyForGrok],
+        model: GROQ_MODEL,
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...historyForGemini],
         stream: true,
       }),
     });
 
-    if (!grokRes.ok) {
+    if (!groqRes.ok) {
       session.messages.pop();
-      if (grokRes.status === 429) return res.status(429).json({ error: "Grok rate limit. Try later." });
-      if (grokRes.status === 401) return res.status(401).json({ error: "Invalid GROK_API_KEY." });
+      if (groqRes.status === 429) return res.status(429).json({ error: "Rate limit reached. Try again in a moment." });
+      if (groqRes.status === 401) return res.status(401).json({ error: "Invalid GROQ_API_KEY." });
       return res.status(500).json({ error: "AI service error" });
     }
 
@@ -173,7 +174,7 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    const reader = grokRes.body.getReader();
+    const reader = groqRes.body.getReader();
     const decoder = new TextDecoder();
     let assistantReply = "";
     let buffer = "";
