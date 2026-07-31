@@ -4,7 +4,6 @@ const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const rateLimit = require("express-rate-limit");
 const nodemailer = require("nodemailer");
-const authRoutes = require("./routes/authRoutes");
 
 dotenv.config();
 
@@ -24,7 +23,6 @@ app.use(
 );
 
 app.use(express.json());
-app.use("/api/auth", authRoutes);
 
 async function connectDB() {
   if (mongoose.connection.readyState >= 1) return;
