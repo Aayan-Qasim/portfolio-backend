@@ -92,12 +92,12 @@ const SYSTEM_PROMPT = `You are Aayan's portfolio AI assistant. Answer questions 
 
 **Education:** F.A Intermediate (2025 - 550 marks) | Matriculation (2023 - 663 marks)
 
-**Projects:** Portfolio Website (React, Tailwind, Framer Motion) | Weather App (JS, REST API) | Task Manager (React, Bootstrap)
+**Projects:** Portfolio Website | SkyPulse Website | Sky Coaching LMS Portal | SM Networking | Ettc.info Portal | Islamic Hub | Barber Portal
 
 **Contact:** 0307-5177781 | aayanqasim@email.com | Available for freelance & full-time work`;
 
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GEMINI_MODEL = "gemini-3.8-flash";
 
 // ── Routes ───────────────────────────────────────────────────
 app.get("/", (req, res) => {
@@ -124,47 +124,59 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
       return res.status(400).json({ error: "message required" });
     }
 
-    const GROQ_API_KEY = process.env.GROQ_API_KEY;
-    if (!GROQ_API_KEY) {
-      return res.status(500).json({ error: "GROQ_API_KEY not set in .env" });
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY;
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: "GEMINI_API_KEY not set in .env" });
     }
 
-    // Session lo ya banao
-    let session = await ChatSession.findOne({ sessionId });
-    if (!session) {
-      session = new ChatSession({ sessionId, messages: [] });
+    // Session lo ya banao (with resilient fallback if DB is connecting)
+    let session = null;
+    let historyForGemini = [];
+    try {
+      if (mongoose.connection.readyState >= 1) {
+        session = await ChatSession.findOne({ sessionId });
+        if (!session) {
+          session = new ChatSession({ sessionId, messages: [] });
+        }
+        session.messages.push({
+          role: "user",
+          content: message.trim(),
+          createdAt: new Date(),
+        });
+        historyForGemini = session.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+      }
+    } catch (dbErr) {
+      console.warn("MongoDB session load warning:", dbErr.message);
     }
 
-    session.messages.push({
-      role: "user",
-      content: message.trim(),
-      createdAt: new Date(),
-    });
-
-    const historyForGemini = session.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    if (historyForGemini.length === 0) {
+      historyForGemini = [{ role: "user", content: message.trim() }];
+    }
 
     // Groq uses standard OpenAI-compatible API with Bearer token
-    const groqRes = await fetch(GROQ_API_URL, {
+    const geminiRes = await fetch(GEMINI_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
+        Authorization: `Bearer ${GEMINI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model: GEMINI_MODEL,
         messages: [{ role: "system", content: SYSTEM_PROMPT }, ...historyForGemini],
         stream: true,
       }),
     });
 
-    if (!groqRes.ok) {
-      session.messages.pop();
-      if (groqRes.status === 429) return res.status(429).json({ error: "Rate limit reached. Try again in a moment." });
-      if (groqRes.status === 401) return res.status(401).json({ error: "Invalid GROQ_API_KEY." });
-      return res.status(500).json({ error: "AI service error" });
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text().catch(() => "");
+      console.error("Gemini API Error:", geminiRes.status, errText);
+      if (session && session.messages) session.messages.pop();
+      if (geminiRes.status === 429) return res.status(429).json({ error: "Rate limit reached. Try again in a moment." });
+      if (geminiRes.status === 401) return res.status(401).json({ error: "Invalid GEMINI_API_KEY." });
+      return res.status(500).json({ error: "AI service error: " + (errText || geminiRes.statusText) });
     }
 
     // Streaming response
@@ -172,7 +184,7 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    const reader = groqRes.body.getReader();
+    const reader = geminiRes.body.getReader();
     const decoder = new TextDecoder();
     let assistantReply = "";
     let buffer = "";
@@ -201,14 +213,18 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
       }
     }
 
-    if (assistantReply) {
-      session.messages.push({
-        role: "assistant",
-        content: assistantReply,
-        createdAt: new Date(),
-      });
+    if (assistantReply && session && mongoose.connection.readyState >= 1) {
+      try {
+        session.messages.push({
+          role: "assistant",
+          content: assistantReply,
+          createdAt: new Date(),
+        });
+        await session.save();
+      } catch (dbErr) {
+        console.warn("MongoDB session save warning:", dbErr.message);
+      }
     }
-    await session.save();
     res.end();
   } catch (err) {
     console.error("Chat error:", err);
